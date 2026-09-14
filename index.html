@@ -7,34 +7,21 @@
     <title>Barcode Scanner</title>
 
     <style>
-        * {
-            box-sizing: border-box;
-        }
-
         body {
-            margin: 0;
-            padding: 30px 15px;
             font-family: Arial, sans-serif;
             text-align: center;
+            padding: 20px;
             background: #f5f5f5;
-        }
-
-        h1 {
-            margin-bottom: 20px;
         }
 
         #scanner {
             width: 100%;
             max-width: 700px;
             height: 400px;
-
             margin: 20px auto;
-
             position: relative;
             overflow: hidden;
-
-            background: #000;
-
+            background: black;
             border: 3px solid #333;
             border-radius: 10px;
         }
@@ -42,83 +29,48 @@
         #scanner video {
             width: 100%;
             height: 100%;
-
             object-fit: cover;
         }
 
-        /*
-            Red scanning box
-        */
         .scan-box {
             position: absolute;
-
-            top: 30%;
             left: 5%;
-
+            top: 30%;
             width: 90%;
             height: 40%;
-
             border: 3px solid red;
-
             pointer-events: none;
         }
 
-        /*
-            Red scanning line
-        */
         .scan-line {
             position: absolute;
-
-            top: 50%;
             left: 0;
-
+            top: 50%;
             width: 100%;
             height: 2px;
-
             background: red;
         }
 
         button {
             padding: 12px 25px;
-
             margin: 5px;
-
-            border: none;
-            border-radius: 6px;
-
-            background: #222;
-            color: white;
-
             font-size: 17px;
-
             cursor: pointer;
-        }
-
-        button:hover {
-            background: #444;
         }
 
         #status {
             margin-top: 15px;
-
             font-size: 18px;
         }
 
         #result {
             margin: 20px auto;
-
             max-width: 500px;
-
             padding: 20px;
-
             background: white;
-
             border-radius: 8px;
-
             font-size: 35px;
             font-weight: bold;
-
-            min-height: 80px;
         }
     </style>
 </head>
@@ -135,7 +87,6 @@
         Stop Scanner
     </button>
 
-
     <div id="scanner">
 
         <div class="scan-box">
@@ -144,11 +95,9 @@
 
     </div>
 
-
     <div id="status">
         Scanner stopped
     </div>
-
 
     <div id="result">
         ---
@@ -160,8 +109,6 @@
 
 
     <script>
-
-        let scanning = false;
 
         const resultElement =
             document.getElementById("result");
@@ -176,6 +123,26 @@
             document.getElementById("stopBtn");
 
 
+        let scanning = false;
+
+
+        /*
+        =====================================================
+            BARCODE -> REQUIRED NUMBER
+        =====================================================
+        */
+
+        const barcodeMap = {
+
+            "FAF": "FD1626",
+
+            "FAK": "DFS656",
+
+            "FA3": "DS6516"
+
+        };
+
+
         /*
         =====================================================
             START SCANNER
@@ -183,10 +150,6 @@
         */
 
         function startScanner() {
-
-            /*
-                Don't start twice
-            */
 
             if (scanning) {
                 return;
@@ -197,12 +160,6 @@
             statusElement.innerText =
                 "Starting camera...";
 
-
-            /*
-            =================================================
-                Quagga configuration
-            =================================================
-            */
 
             Quagga.init({
 
@@ -225,15 +182,16 @@
 
                     },
 
-                    /*
-                        Better camera area
-                    */
-
                     area: {
+
                         top: "20%",
+
                         right: "5%",
+
                         left: "5%",
+
                         bottom: "20%"
+
                     }
 
                 },
@@ -241,21 +199,22 @@
 
                 locator: {
 
-                    patchSize: "medium",
+                    patchSize: "small",
 
                     halfSample: false
 
                 },
 
 
-                /*
-                    Your barcode is Code 128
-                */
-
                 decoder: {
 
+                    /*
+                        IMPORTANT:
+                        Your barcode is Code 39
+                    */
+
                     readers: [
-                        "code_128_reader"
+                        "code_39_reader"
                     ],
 
                     multiple: false
@@ -265,8 +224,6 @@
 
                 locate: true,
 
-                numOfWorkers: 0,
-
                 frequency: 10,
 
                 debug: false
@@ -275,14 +232,10 @@
 
                 if (error) {
 
-                    console.error(
-                        "Quagga error:",
-                        error
-                    );
+                    console.error(error);
 
                     statusElement.innerText =
-                        "Camera error: " +
-                        error.message;
+                        "Camera error";
 
                     scanning = false;
 
@@ -294,8 +247,9 @@
                     "Scanner started"
                 );
 
+
                 statusElement.innerText =
-                    "Scanning... Put barcode inside red box";
+                    "Scanning...";
 
 
                 Quagga.start();
@@ -313,7 +267,7 @@
         =====================================================
         */
 
-        function barcodeDetected(result) {
+        function handleDetected(result) {
 
             if (!result) {
                 return;
@@ -325,39 +279,79 @@
             }
 
 
-            const code =
+            const scannedCode =
                 result.codeResult.code;
 
 
-            if (!code) {
+            if (!scannedCode) {
                 return;
             }
 
 
             console.log(
-                "Detected barcode:",
-                code
+                "Barcode detected:",
+                scannedCode
             );
 
 
             /*
-                Show ONLY barcode value
+            =================================================
+                Convert barcode value
+            =================================================
             */
 
-            resultElement.innerText = code;
-
-
-            statusElement.innerText =
-                "Barcode detected";
+            const finalValue =
+                barcodeMap[scannedCode];
 
 
             /*
-                Stop scanner
+                If barcode exists in our mapping,
+                show required value.
             */
 
-            stopScanner();
+            if (finalValue) {
+
+                console.log(
+                    "Final value:",
+                    finalValue
+                );
+
+
+                resultElement.innerText =
+                    finalValue;
+
+
+                statusElement.innerText =
+                    "Barcode detected";
+
+
+                stopScanner();
+
+            } else {
+
+                /*
+                    Useful for testing unknown barcodes.
+                */
+
+                console.log(
+                    "Unknown barcode:",
+                    scannedCode
+                );
+
+            }
 
         }
+
+
+        /*
+        =====================================================
+            REGISTER EVENT ONLY ONCE
+        =====================================================
+        */
+
+        Quagga.onDetected(
+            handleDetected
+        );
 
 
         /*
@@ -372,23 +366,17 @@
                 return;
             }
 
-
             try {
 
                 Quagga.stop();
 
             } catch (error) {
 
-                console.log(
-                    "Stop error:",
-                    error
-                );
+                console.log(error);
 
             }
 
-
             scanning = false;
-
 
             statusElement.innerText =
                 "Scanner stopped";
@@ -398,19 +386,7 @@
 
         /*
         =====================================================
-            IMPORTANT
-            Register event ONLY ONCE
-        =====================================================
-        */
-
-        Quagga.onDetected(
-            barcodeDetected
-        );
-
-
-        /*
-        =====================================================
-            BUTTON EVENTS
+            BUTTONS
         =====================================================
         */
 
