@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Code Scan</title>
+<style>
+  :root{
+    --bg: #0B0E14;
+    --panel: #12161F;
+    --line: #232939;
+    --ink: #ECEEF3;
+    --muted: #7C8698;
+    --laser: #FF4B4B;
+    --laser-dim: rgba(255,75,75,0.25);
+    --ok: #35D48A;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .mono{
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  .stage{
+    width:100%;
+    max-width:420px;
+  }
+
+  .eyebrow{
+    color:var(--muted);
+    font-size:13px;
+    margin:0 0 6px 0;
+    letter-spacing:0.01em;
+  }
+  h1{
+    font-size:22px;
+    font-weight:600;
+    margin:0 0 28px 0;
+    line-height:1.3;
+  }
+
+  /* ---- Permission card ---- */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:28px;
+  }
+  .card p{
+    color:var(--muted);
+    font-size:14px;
+    line-height:1.6;
+    margin:0 0 24px 0;
+  }
+  .btn-row{
+    display:flex;
+    gap:10px;
+  }
+  button{
+    font:inherit;
+    border:none;
+    border-radius:10px;
+    padding:13px 16px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    flex:1;
+    transition: transform .12s ease, opacity .12s ease;
+  }
+  button:active{ transform: scale(0.97); }
+  .btn-allow{
+    background:var(--ink);
+    color:#0B0E14;
+  }
+  .btn-deny{
+    background:transparent;
+    color:var(--muted);
+    border:1px solid var(--line);
+  }
+
+  /* ---- Scanner view ---- */
+  .viewfinder{
+    position:relative;
+    background:#000;
+    border-radius:14px;
+    overflow:hidden;
+    aspect-ratio: 3 / 4;
+    border:1px solid var(--line);
+  }
+  video{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+  }
+  .frame{
+    position:absolute;
+    inset:14%;
+    border:2px solid rgba(255,255,255,0.7);
+    border-radius:12px;
+    pointer-events:none;
+  }
+  .frame::before, .frame::after,
+  .frame > i::before, .frame > i::after{
+    content:"";
+    position:absolute;
+    width:22px;
+    height:22px;
+    border:3px solid var(--ink);
+  }
+  .frame::before{ top:-3px; left:-3px; border-right:none; border-bottom:none; border-radius:8px 0 0 0;}
+  .frame::after{ top:-3px; right:-3px; border-left:none; border-bottom:none; border-radius:0 8px 0 0;}
+  .frame > i::before{ bottom:-3px; left:-3px; border-right:none; border-top:none; border-radius:0 0 0 8px;}
+  .frame > i::after{ bottom:-3px; right:-3px; border-left:none; border-top:none; border-radius:0 0 8px 0;}
+
+  .laser{
+    position:absolute;
+    left:14%;
+    right:14%;
+    height:2px;
+    background: linear-gradient(90deg, transparent, var(--laser), transparent);
+    box-shadow: 0 0 8px 1px var(--laser-dim);
+    top:14%;
+    animation: sweep 1.8s ease-in-out infinite;
+  }
+  @keyframes sweep{
+    0%   { top:14%; }
+    50%  { top:84%; }
+    100% { top:14%; }
+  }
+  .laser.paused{ animation-play-state: paused; opacity:0; }
+
+  .status{
+    margin-top:16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    color:var(--muted);
+    font-size:13px;
+  }
+  .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--muted);
+    display:inline-block;
+    margin-right:8px;
+  }
+  .dot.live{ background:var(--laser); }
+  .dot.done{ background:var(--ok); }
+
+  .stop-link{
+    background:none; border:none; color:var(--muted);
+    font-size:13px; text-decoration:underline; cursor:pointer; padding:0; flex:none;
+  }
+
+  /* ---- Result ---- */
+  .result{
+    margin-top:16px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px;
+    display:none;
+  }
+  .result.show{ display:block; }
+  .result .label{
+    color:var(--muted);
+    font-size:13px;
+    margin-bottom:8px;
+  }
+  .result .number{
+    font-size:28px;
+    font-weight:600;
+    letter-spacing:0.02em;
+    word-break:break-all;
+  }
+  .result .again{
+    margin-top:18px;
+    width:100%;
+    background:transparent;
+    color:var(--ink);
+    border:1px solid var(--line);
+  }
+
+  .hidden{ display:none !important; }
+  .fallback{ color:var(--muted); font-size:14px; line-height:1.6; }
+
+  /* ---- History ---- */
+  .history{
+    margin-top:16px;
+  }
+  .history-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    color:var(--muted);
+    font-size:13px;
+    margin-bottom:10px;
+  }
+  .history-list{
+    list-style:none;
+    margin:0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .history-list li{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .history-list .val{
+    font-size:16px;
+    font-weight:600;
+    word-break:break-all;
+  }
+  .history-list .row-actions{
+    display:flex;
+    gap:14px;
+    flex:none;
+  }
+  .history-list button{
+    flex:none;
+    background:none;
+    border:none;
+    color:var(--muted);
+    font-size:13px;
+    padding:0;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+  .history-empty{
+    color:var(--muted);
+    font-size:13px;
+    padding:14px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <!-- Screen 1: permission gate -->
+  <section id="gate">
+    <p class="eyebrow">Scanner</p>
+    <h1>Point your camera at a code to read its number.</h1>
+    <div class="card">
+      <p>This uses your camera to read barcodes and QR codes, right here in the browser. Nothing is uploaded — the scan happens on your device.</p>
+      <div class="btn-row">
+        <button class="btn-deny" id="denyBtn">Don't allow</button>
+        <button class="btn-allow" id="allowBtn">Allow camera</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screen 2: denied -->
+  <section id="denied" class="hidden">
+    <p class="eyebrow">Scanner</p>
+    <h1>Camera access is off.</h1>
+    <div class="card">
+      <p class="fallback">You can turn it back on any time — nothing else on this page needs your camera.</p>
+      <div class="btn-row">
+        <button class="btn-allow" id="retryBtn" style="flex:none;">Try again</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screen 3: scanning -->
+  <section id="scanner" class="hidden">
+    <p class="eyebrow">Scanner</p>
+    <h1>Hold steady over the code.</h1>
+    <div class="viewfinder">
+      <video id="video" playsinline muted></video>
+      <div class="frame"><i></i></div>
+      <div class="laser" id="laser"></div>
+    </div>
+    <div class="status">
+      <span><span class="dot live" id="statusDot"></span><span id="statusText">Looking for a code…</span></span>
+      <button class="stop-link" id="stopBtn">Stop</button>
+    </div>
+
+    <div class="result" id="result">
+      <div class="label">Number found</div>
+      <div class="number mono" id="numberOut">—</div>
+      <button class="again" id="againBtn">Scan another</button>
+    </div>
+
+    <div class="history" id="historyBox">
+      <div class="history-head">
+        <span id="historyCount">0 scanned</span>
+        <button class="stop-link" id="clearBtn">Clear all</button>
+      </div>
+      <ul class="history-list" id="historyList"></ul>
+    </div>
+  </section>
+
+  <!-- Screen 4: unsupported browser -->
+  <section id="unsupported" class="hidden">
+    <p class="eyebrow">Scanner</p>
+    <h1>This browser can't scan codes yet.</h1>
+    <div class="card">
+      <p class="fallback">Barcode scanning needs a browser with native code-detection support — Chrome or Edge on Android, or Chrome/Edge on desktop, work well. Safari and Firefox don't support it yet.</p>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var gateEl = document.getElementById('gate');
+  var deniedEl = document.getElementById('denied');
+  var scannerEl = document.getElementById('scanner');
+  var unsupportedEl = document.getElementById('unsupported');
+
+  var allowBtn = document.getElementById('allowBtn');
+  var denyBtn = document.getElementById('denyBtn');
+  var retryBtn = document.getElementById('retryBtn');
+  var stopBtn = document.getElementById('stopBtn');
+  var againBtn = document.getElementById('againBtn');
+
+  var video = document.getElementById('video');
+  var laser = document.getElementById('laser');
+  var statusDot = document.getElementById('statusDot');
+  var statusText = document.getElementById('statusText');
+  var resultBox = document.getElementById('result');
+  var numberOut = document.getElementById('numberOut');
+
+  var historyList = document.getElementById('historyList');
+  var historyCount = document.getElementById('historyCount');
+  var clearBtn = document.getElementById('clearBtn');
+
+  var STORAGE_KEY = 'scan_history_v1';
+  var history = [];
+
+  function loadHistory(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      history = raw ? JSON.parse(raw) : [];
+    }catch(e){
+      history = [];
+    }
+  }
+
+  function persistHistory(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    }catch(e){ /* storage unavailable, keep in memory only */ }
+  }
+
+  function renderHistory(){
+    historyCount.textContent = history.length + (history.length === 1 ? ' scanned' : ' scanned');
+    historyList.innerHTML = '';
+
+    if (!history.length){
+      var empty = document.createElement('li');
+      empty.className = 'history-empty';
+      empty.style.border = 'none';
+      empty.style.background = 'none';
+      empty.style.padding = '0';
+      empty.textContent = 'Scanned codes will show up here.';
+      historyList.appendChild(empty);
+      return;
+    }
+
+    // newest first
+    for (var i = history.length - 1; i >= 0; i--){
+      (function(entry, idx){
+        var li = document.createElement('li');
+
+        var val = document.createElement('span');
+        val.className = 'val mono';
+        val.textContent = entry.value;
+
+        var actions = document.createElement('span');
+        actions.className = 'row-actions';
+
+        var copyBtn = document.createElement('button');
+        copyBtn.textContent = 'Copy';
+        copyBtn.addEventListener('click', function(){
+          copyText(entry.value, copyBtn);
+        });
+
+        var removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', function(){
+          history.splice(idx, 1);
+          persistHistory();
+          renderHistory();
+        });
+
+        actions.appendChild(copyBtn);
+        actions.appendChild(removeBtn);
+        li.appendChild(val);
+        li.appendChild(actions);
+        historyList.appendChild(li);
+      })(history[i], i);
+    }
+  }
+
+  function copyText(text, btn){
+    var done = function(){
+      var original = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(function(){ btn.textContent = original; }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done).catch(function(){});
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand('copy'); }catch(e){}
+      document.body.removeChild(ta);
+      done();
+    }
+  }
+
+  function saveScan(value){
+    // Skip if identical to the most recent scan (avoids duplicate frames).
+    if (history.length && history[history.length - 1].value === value) return;
+    history.push({ value: value, time: Date.now() });
+    persistHistory();
+    renderHistory();
+  }
+
+  clearBtn.addEventListener('click', function(){
+    history = [];
+    persistHistory();
+    renderHistory();
+  });
+
+  loadHistory();
+  renderHistory();
+
+  var stream = null;
+  var detector = null;
+  var rafId = null;
+  var running = false;
+
+  function showOnly(el){
+    [gateEl, deniedEl, scannerEl, unsupportedEl].forEach(function(s){
+      s.classList.add('hidden');
+    });
+    el.classList.remove('hidden');
+  }
+
+  function hasBarcodeDetector(){
+    return 'BarcodeDetector' in window;
+  }
+
+  function stopCamera(){
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    if (stream){
+      stream.getTracks().forEach(function(t){ t.stop(); });
+      stream = null;
+    }
+  }
+
+  function onDetected(value){
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    laser.classList.add('paused');
+    statusDot.className = 'dot done';
+    statusText.textContent = 'Code read';
+    numberOut.textContent = value.trim();
+    resultBox.classList.add('show');
+    saveScan(value.trim());
+  }
+
+  function scanLoop(){
+    if (!running) return;
+    detector.detect(video).then(function(codes){
+      if (codes && codes.length){
+        onDetected(codes[0].rawValue);
+        return;
+      }
+      rafId = requestAnimationFrame(scanLoop);
+    }).catch(function(){
+      rafId = requestAnimationFrame(scanLoop);
+    });
+  }
+
+  function startScanning(){
+    resultBox.classList.remove('show');
+    laser.classList.remove('paused');
+    statusDot.className = 'dot live';
+    statusText.textContent = 'Looking for a code…';
+
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    }).then(function(s){
+      stream = s;
+      video.srcObject = stream;
+      return video.play();
+    }).then(function(){
+      showOnly(scannerEl);
+      detector = new window.BarcodeDetector({
+        formats: ['qr_code','ean_13','ean_8','upc_a','upc_e','code_128','code_39','codabar','itf']
+      });
+      running = true;
+      scanLoop();
+    }).catch(function(err){
+      showOnly(deniedEl);
+    });
+  }
+
+  allowBtn.addEventListener('click', function(){
+    if (!hasBarcodeDetector()){
+      showOnly(unsupportedEl);
+      return;
+    }
+    startScanning();
+  });
+
+  denyBtn.addEventListener('click', function(){
+    showOnly(deniedEl);
+  });
+
+  retryBtn.addEventListener('click', function(){
+    showOnly(gateEl);
+  });
+
+  stopBtn.addEventListener('click', function(){
+    stopCamera();
+    showOnly(gateEl);
+  });
+
+  againBtn.addEventListener('click', function(){
+    startScanning();
+  });
+
+  window.addEventListener('beforeunload', stopCamera);
+})();
+</script>
+
+</body>
+</html>
