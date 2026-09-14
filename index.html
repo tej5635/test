@@ -386,7 +386,7 @@
 
         var val = document.createElement('span');
         val.className = 'val mono';
-        val.textContent = entry.value.length ? entry.value : '(no digits)';
+        val.textContent = entry.value;
 
         var actions = document.createElement('span');
         actions.className = 'row-actions';
@@ -475,21 +475,15 @@
     }
   }
 
-  function extractNumber(rawValue){
-    var digits = (rawValue.match(/\d+/g) || []).join('');
-    return digits; // empty string if the code has no digits at all
-  }
-
   function onDetected(value){
     running = false;
     if (rafId) cancelAnimationFrame(rafId);
     laser.classList.add('paused');
     statusDot.className = 'dot done';
     statusText.textContent = 'Code read';
-    var digitsOnly = extractNumber(value.trim());
-    numberOut.textContent = digitsOnly.length ? digitsOnly : '(no digits in this code)';
+    numberOut.textContent = value.trim();
     resultBox.classList.add('show');
-    saveScan(digitsOnly);
+    saveScan(value.trim());
   }
 
   function scanLoop(){
@@ -520,13 +514,11 @@
       return video.play();
     }).then(function(){
       showOnly(scannerEl);
-      var wanted = ['qr_code','ean_13','ean_8','upc_a','upc_e','code_128','code_39','code_93','codabar','itf','pdf417','data_matrix','aztec'];
-      return window.BarcodeDetector.getSupportedFormats().then(function(supported){
-        var formats = wanted.filter(function(f){ return supported.indexOf(f) !== -1; });
-        detector = new window.BarcodeDetector({ formats: formats.length ? formats : supported });
-        running = true;
-        scanLoop();
+      detector = new window.BarcodeDetector({
+        formats: ['qr_code','ean_13','ean_8','upc_a','upc_e','code_128','code_39','codabar','itf']
       });
+      running = true;
+      scanLoop();
     }).catch(function(err){
       showOnly(deniedEl);
     });
