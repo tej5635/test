@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
+
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0"
@@ -27,7 +29,7 @@
         }
 
         h1 {
-            margin-bottom: 15px;
+            margin-bottom: 20px;
         }
 
         #scanner {
@@ -54,20 +56,15 @@
             object-fit: cover;
         }
 
-        /*
-        =========================================
-        RED SCANNING BOX
-        =========================================
-        */
+        /* Red scanning box */
 
         .scan-box {
             position: absolute;
 
-            left: 5%;
-            right: 5%;
-
             top: 30%;
+            left: 5%;
 
+            width: 90%;
             height: 40%;
 
             border: 3px solid red;
@@ -75,30 +72,19 @@
             pointer-events: none;
         }
 
-        /*
-        =========================================
-        SCAN LINE
-        =========================================
-        */
+        /* Red scanning line */
 
         .scan-line {
             position: absolute;
 
-            left: 0;
-            right: 0;
-
             top: 50%;
+            left: 0;
 
+            width: 100%;
             height: 3px;
 
             background: red;
         }
-
-        /*
-        =========================================
-        BUTTONS
-        =========================================
-        */
 
         button {
             padding: 13px 25px;
@@ -122,23 +108,11 @@
             background: #444;
         }
 
-        /*
-        =========================================
-        STATUS
-        =========================================
-        */
-
         #status {
             margin-top: 15px;
 
             font-size: 18px;
         }
-
-        /*
-        =========================================
-        RESULT
-        =========================================
-        */
 
         #result {
             width: 100%;
@@ -162,10 +136,12 @@
         }
 
     </style>
+
 </head>
 
 
 <body>
+
 
     <h1>Barcode Scanner</h1>
 
@@ -209,405 +185,302 @@
     </div>
 
 
-<script>
 
-/*
-====================================================
-ELEMENTS
-====================================================
-*/
-
-const video =
-    document.getElementById("video");
-
-const result =
-    document.getElementById("result");
-
-const status =
-    document.getElementById("status");
-
-const startBtn =
-    document.getElementById("startBtn");
-
-const stopBtn =
-    document.getElementById("stopBtn");
+    <!--
+        ZXing Browser
+    -->
+    <script src="https://unpkg.com/@zxing/browser@latest"></script>
 
 
-/*
-====================================================
-VARIABLES
-====================================================
-*/
-
-let stream = null;
-
-let scanning = false;
-
-let detector = null;
-
-let lastDetected = "";
-
-let detecting = false;
-
-
-/*
-====================================================
-CHECK BARCODE DETECTOR
-====================================================
-*/
-
-function checkBarcodeDetector() {
-
-    if (!("BarcodeDetector" in window)) {
-
-        status.innerText =
-            "BarcodeDetector is not supported in this browser.";
-
-        return false;
-    }
-
-    return true;
-}
-
-
-/*
-====================================================
-START CAMERA
-====================================================
-*/
-
-async function startCamera() {
-
-    if (scanning) {
-        return;
-    }
-
-
-    /*
-    -----------------------------------------------
-    Check browser support
-    -----------------------------------------------
-    */
-
-    if (!checkBarcodeDetector()) {
-
-        return;
-    }
-
-
-    try {
+    <script>
 
         /*
-        -------------------------------------------
-        Create barcode detector
-        -------------------------------------------
+        ====================================================
+            VARIABLES
+        ====================================================
         */
 
-        detector =
-            new BarcodeDetector({
+        let codeReader = null;
 
-                formats: [
+        let controls = null;
 
-                    "code_128",
+        let scanning = false;
 
-                    "code_39",
 
-                    "code_93",
+        const video =
+            document.getElementById("video");
 
-                    "codabar",
 
-                    "ean_13",
+        const result =
+            document.getElementById("result");
 
-                    "ean_8",
 
-                    "itf",
+        const status =
+            document.getElementById("status");
 
-                    "upc_a",
 
-                    "upc_e"
+        const startBtn =
+            document.getElementById("startBtn");
 
-                ]
 
-            });
+        const stopBtn =
+            document.getElementById("stopBtn");
+
 
 
         /*
-        -------------------------------------------
-        Open camera
-        -------------------------------------------
+        ====================================================
+            START SCANNER
+        ====================================================
         */
 
-        stream =
-            await navigator.mediaDevices.getUserMedia({
+        async function startScanner() {
 
-                video: {
+            /*
+                Prevent duplicate scanners
+            */
 
-                    facingMode: {
-                        ideal: "environment"
-                    },
+            if (scanning) {
 
-                    width: {
-                        ideal: 1280
-                    },
+                return;
 
-                    height: {
-                        ideal: 720
-                    }
-
-                },
-
-                audio: false
-
-            });
+            }
 
 
-        /*
-        -------------------------------------------
-        Put camera into video
-        -------------------------------------------
-        */
-
-        video.srcObject = stream;
-
-
-        await video.play();
-
-
-        scanning = true;
-
-        result.innerText = "---";
-
-        status.innerText =
-            "Scanning... Put barcode inside red box";
-
-
-        /*
-        -------------------------------------------
-        Start detection
-        -------------------------------------------
-        */
-
-        scanBarcode();
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        status.innerText =
-            "Camera error: " + error.message;
-
-    }
-
-}
-
-
-/*
-====================================================
-SCAN BARCODE
-====================================================
-*/
-
-async function scanBarcode() {
-
-    if (!scanning) {
-        return;
-    }
-
-
-    /*
-    -----------------------------------------------
-    Don't run two detections simultaneously
-    -----------------------------------------------
-    */
-
-    if (detecting) {
-
-        requestAnimationFrame(
-            scanBarcode
-        );
-
-        return;
-    }
-
-
-    detecting = true;
-
-
-    try {
-
-        /*
-        -------------------------------------------
-        Detect barcode from camera
-        -------------------------------------------
-        */
-
-        const barcodes =
-            await detector.detect(video);
-
-
-        /*
-        -------------------------------------------
-        If barcode found
-        -------------------------------------------
-        */
-
-        if (
-            barcodes &&
-            barcodes.length > 0
-        ) {
-
-            const barcode =
-                barcodes[0];
-
-
-            const value =
-                barcode.rawValue;
-
-
-            console.log(
-                "Barcode detected:",
-                value
-            );
-
-
-            if (value) {
+            try {
 
                 /*
-                -----------------------------------
-                Show ONLY barcode value
-                -----------------------------------
+                ============================================
+                    Create ZXing reader
+                ============================================
                 */
 
-                result.innerText =
-                    value;
+                codeReader =
+                    new ZXingBrowser.BrowserMultiFormatOneDReader();
+
+
+                /*
+                ============================================
+                    Reset result
+                ============================================
+                */
+
+                result.innerText = "---";
 
 
                 status.innerText =
-                    "Barcode detected";
+                    "Starting camera...";
 
 
-                lastDetected =
-                    value;
+                scanning = true;
 
 
                 /*
-                -----------------------------------
-                Stop camera
-                -----------------------------------
+                ============================================
+                    Start camera + barcode scanning
+                ============================================
                 */
 
-                stopCamera();
+                controls =
+                    await codeReader.decodeFromConstraints(
+
+                        {
+
+                            video: {
+
+                                facingMode: {
+                                    ideal: "environment"
+                                },
+
+                                width: {
+                                    ideal: 1280
+                                },
+
+                                height: {
+                                    ideal: 720
+                                }
+
+                            },
+
+                            audio: false
+
+                        },
+
+                        video,
+
+                        (scanResult, error) => {
 
 
-                detecting = false;
+                            /*
+                            =================================
+                                BARCODE FOUND
+                            =================================
+                            */
 
-                return;
+                            if (scanResult) {
+
+                                const value =
+                                    scanResult.getText();
+
+
+                                console.log(
+                                    "Barcode:",
+                                    value
+                                );
+
+
+                                /*
+                                =================================
+                                    SHOW ONLY VALUE
+                                =================================
+                                */
+
+                                result.innerText =
+                                    value;
+
+
+                                status.innerText =
+                                    "Barcode detected";
+
+
+                                /*
+                                =================================
+                                    STOP SCANNER
+                                =================================
+                                */
+
+                                stopScanner();
+
+                            }
+
+
+                            /*
+                            =================================
+                                Ignore normal scan errors
+                            =================================
+
+                                ZXing continuously tries to
+                                decode frames. Not finding a
+                                barcode is normal.
+                            */
+
+                        }
+
+                    );
+
+
+                status.innerText =
+                    "Scanning... Put barcode inside red box";
+
+
+            } catch (error) {
+
+                console.error(
+                    "Scanner error:",
+                    error
+                );
+
+
+                scanning = false;
+
+
+                status.innerText =
+                    "Scanner error: " +
+                    error.message;
+
             }
 
         }
 
-    } catch (error) {
 
-        console.log(
-            "Detection error:",
-            error
+
+        /*
+        ====================================================
+            STOP SCANNER
+        ====================================================
+        */
+
+        function stopScanner() {
+
+            scanning = false;
+
+
+            /*
+            ================================================
+                Stop ZXing
+            ================================================
+            */
+
+            if (controls) {
+
+                controls.stop();
+
+                controls = null;
+
+            }
+
+
+            /*
+            ================================================
+                Stop camera tracks
+            ================================================
+            */
+
+            if (video.srcObject) {
+
+                const tracks =
+                    video.srcObject.getTracks();
+
+
+                tracks.forEach(
+                    track => track.stop()
+                );
+
+
+                video.srcObject = null;
+
+            }
+
+
+            /*
+            ================================================
+                Keep result visible
+            ================================================
+            */
+
+            if (
+                result.innerText === "---"
+            ) {
+
+                status.innerText =
+                    "Camera stopped";
+
+            }
+
+        }
+
+
+
+        /*
+        ====================================================
+            BUTTON EVENTS
+        ====================================================
+        */
+
+        startBtn.addEventListener(
+            "click",
+            startScanner
         );
 
-    }
 
-
-    detecting = false;
-
-
-    /*
-    -----------------------------------------------
-    Continue scanning
-    -----------------------------------------------
-    */
-
-    if (scanning) {
-
-        requestAnimationFrame(
-            scanBarcode
+        stopBtn.addEventListener(
+            "click",
+            stopScanner
         );
 
-    }
 
-}
-
-
-/*
-====================================================
-STOP CAMERA
-====================================================
-*/
-
-function stopCamera() {
-
-    scanning = false;
-
-    detecting = false;
-
-
-    if (stream) {
-
-        stream
-            .getTracks()
-            .forEach(
-                function(track) {
-
-                    track.stop();
-
-                }
-            );
-
-        stream = null;
-
-    }
-
-
-    video.srcObject = null;
-
-
-    /*
-        Don't change result here.
-        We want to keep the detected value.
-    */
-
-    if (lastDetected) {
-
-        status.innerText =
-            "Barcode detected";
-
-    } else {
-
-        status.innerText =
-            "Camera stopped";
-
-    }
-
-}
-
-
-/*
-====================================================
-BUTTONS
-====================================================
-*/
-
-startBtn.addEventListener(
-    "click",
-    startCamera
-);
-
-
-stopBtn.addEventListener(
-    "click",
-    stopCamera
-);
-
-</script>
+    </script>
 
 </body>
+
 </html>
