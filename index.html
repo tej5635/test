@@ -2,11 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <title>Plain JavaScript Barcode Scanner</title>
+    <title>Barcode Scanner</title>
 
     <style>
+
         * {
             box-sizing: border-box;
         }
@@ -14,48 +18,68 @@
         body {
             margin: 0;
             padding: 20px;
+
             font-family: Arial, sans-serif;
-            background: #f4f4f4;
+
+            background: #f5f5f5;
+
             text-align: center;
         }
 
         h1 {
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
 
-        .scanner-container {
+        #scanner {
+            position: relative;
+
             width: 100%;
             max-width: 700px;
+
             height: 450px;
+
             margin: 20px auto;
-            position: relative;
+
             overflow: hidden;
+
             background: #000;
-            border-radius: 10px;
+
+            border-radius: 12px;
         }
 
         #video {
             width: 100%;
             height: 100%;
+
             object-fit: cover;
         }
 
         /*
-            Scanning area
+        =========================================
+        RED SCANNING BOX
+        =========================================
         */
+
         .scan-box {
             position: absolute;
 
             left: 5%;
             right: 5%;
 
-            top: 35%;
-            height: 30%;
+            top: 30%;
+
+            height: 40%;
 
             border: 3px solid red;
 
             pointer-events: none;
         }
+
+        /*
+        =========================================
+        SCAN LINE
+        =========================================
+        */
 
         .scan-line {
             position: absolute;
@@ -65,21 +89,32 @@
 
             top: 50%;
 
-            height: 2px;
+            height: 3px;
 
             background: red;
         }
 
+        /*
+        =========================================
+        BUTTONS
+        =========================================
+        */
+
         button {
-            padding: 12px 25px;
+            padding: 13px 25px;
+
             margin: 5px;
+
             border: none;
-            border-radius: 6px;
+
+            border-radius: 7px;
 
             background: #222;
+
             color: white;
 
-            font-size: 16px;
+            font-size: 17px;
+
             cursor: pointer;
         }
 
@@ -87,69 +122,68 @@
             background: #444;
         }
 
+        /*
+        =========================================
+        STATUS
+        =========================================
+        */
+
         #status {
             margin-top: 15px;
+
             font-size: 18px;
         }
 
-        #result {
-            margin-top: 15px;
+        /*
+        =========================================
+        RESULT
+        =========================================
+        */
 
-            font-size: 35px;
-            font-weight: bold;
+        #result {
+            width: 100%;
+            max-width: 500px;
+
+            min-height: 80px;
+
+            margin: 20px auto;
+
+            padding: 20px;
 
             background: white;
 
-            padding: 15px;
+            border-radius: 10px;
 
-            max-width: 500px;
+            font-size: 35px;
 
-            margin-left: auto;
-            margin-right: auto;
+            font-weight: bold;
 
-            border-radius: 8px;
-
-            min-height: 70px;
+            word-break: break-all;
         }
 
-        #canvas {
-            display: none;
-        }
-
-        .instructions {
-            max-width: 700px;
-            margin: auto;
-            color: #555;
-        }
     </style>
 </head>
+
 
 <body>
 
     <h1>Barcode Scanner</h1>
 
-    <div class="instructions">
-        <p>
-            Put the barcode inside the red box.
-        </p>
 
-        <p>
-            The scanner will return only the barcode number.
-        </p>
-    </div>
-
-
-    <div class="scanner-container">
+    <div id="scanner">
 
         <video
             id="video"
             autoplay
             muted
-            playsinline>
-        </video>
+            playsinline
+        ></video>
+
 
         <div class="scan-box">
+
             <div class="scan-line"></div>
+
         </div>
 
     </div>
@@ -158,6 +192,7 @@
     <button id="startBtn">
         Start Camera
     </button>
+
 
     <button id="stopBtn">
         Stop Camera
@@ -174,1112 +209,139 @@
     </div>
 
 
-    <canvas id="canvas"></canvas>
-
-
 <script>
 
 /*
-===========================================================
-    ELEMENTS
-===========================================================
+====================================================
+ELEMENTS
+====================================================
 */
 
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
+const video =
+    document.getElementById("video");
 
-const ctx = canvas.getContext("2d", {
-    willReadFrequently: true
-});
+const result =
+    document.getElementById("result");
 
-const startBtn = document.getElementById("startBtn");
-const stopBtn = document.getElementById("stopBtn");
+const status =
+    document.getElementById("status");
 
-const statusText = document.getElementById("status");
-const resultText = document.getElementById("result");
+const startBtn =
+    document.getElementById("startBtn");
 
+const stopBtn =
+    document.getElementById("stopBtn");
+
+
+/*
+====================================================
+VARIABLES
+====================================================
+*/
 
 let stream = null;
+
 let scanning = false;
-let lastResult = "";
+
+let detector = null;
+
+let lastDetected = "";
+
+let detecting = false;
 
 
 /*
-===========================================================
-    CODE 128 PATTERNS
-===========================================================
-
-    Each Code 128 character contains 6 bar/space widths.
-
-    Example:
-
-    212222
-
-    means:
-
-    black  = 2
-    white  = 1
-    black  = 2
-    white  = 2
-    black  = 2
-    white  = 2
-
-===========================================================
+====================================================
+CHECK BARCODE DETECTOR
+====================================================
 */
 
-const CODE128_PATTERNS = [
+function checkBarcodeDetector() {
 
-    "212222",
-    "222122",
-    "222221",
-    "121223",
-    "121322",
-    "131222",
-    "122213",
-    "122312",
-    "132212",
-    "221213",
+    if (!("BarcodeDetector" in window)) {
 
-    "221312",
-    "231212",
-    "112232",
-    "122132",
-    "122231",
-    "113222",
-    "123122",
-    "123221",
-    "223211",
-    "221132",
+        status.innerText =
+            "BarcodeDetector is not supported in this browser.";
 
-    "221231",
-    "213212",
-    "223112",
-    "312131",
-    "311222",
-    "321122",
-    "321221",
-    "312212",
-    "322112",
-    "322211",
-
-    "212123",
-    "212321",
-    "232121",
-    "111323",
-    "131123",
-    "131321",
-    "112313",
-    "132113",
-    "132311",
-    "211313",
-
-    "231113",
-    "231311",
-    "112133",
-    "112331",
-    "132131",
-    "113123",
-    "113321",
-    "133121",
-    "313121",
-    "211331",
-
-    "231131",
-    "213113",
-    "213311",
-    "213131",
-    "311123",
-    "311321",
-    "331121",
-    "312113",
-    "312311",
-    "332111",
-
-    "314111",
-    "221411",
-    "431111",
-    "111224",
-    "111422",
-    "121124",
-    "121421",
-    "141122",
-    "141221",
-    "112214",
-
-    "112412",
-    "122114",
-    "122411",
-    "142112",
-    "142211",
-    "241211",
-    "221114",
-    "413111",
-    "241112",
-    "134111",
-
-    "111242",
-    "121142",
-    "121241",
-    "114212",
-    "124112",
-    "124211",
-    "411212",
-    "421112",
-    "421211",
-    "212141",
-
-    "214121",
-    "412121",
-    "111143",
-    "111341",
-    "131141",
-    "114113",
-    "114311",
-    "411113",
-    "411311",
-    "113141",
-
-    "114131",
-    "311141",
-    "411131",
-    "211412",
-    "211214",
-    "211232",
-
-    // STOP
-    "2331112"
-];
-
-
-/*
-===========================================================
-    START / STOP CODES
-===========================================================
-*/
-
-const START_A = 103;
-const START_B = 104;
-const START_C = 105;
-
-const STOP = 106;
-
-
-/*
-===========================================================
-    CODE 128 SET B
-===========================================================
-
-    Your values such as:
-
-        FD1626
-        DFS656
-        DS6516
-
-    are normal Code 128 Set B text.
-
-===========================================================
-*/
-
-function code128ValueToCharacter(code) {
-
-    if (code >= 0 && code <= 95) {
-
-        return String.fromCharCode(code + 32);
-
-    }
-
-    return null;
-}
-
-
-/*
-===========================================================
-    OTSU THRESHOLD
-
-    Automatically finds a black/white threshold.
-
-===========================================================
-*/
-
-function getOtsuThreshold(grayPixels) {
-
-    const histogram = new Array(256).fill(0);
-
-    for (let i = 0; i < grayPixels.length; i++) {
-
-        histogram[grayPixels[i]]++;
-
-    }
-
-    const total = grayPixels.length;
-
-    let sum = 0;
-
-    for (let i = 0; i < 256; i++) {
-
-        sum += i * histogram[i];
-
-    }
-
-    let sumBackground = 0;
-    let weightBackground = 0;
-
-    let bestThreshold = 128;
-    let bestVariance = 0;
-
-    for (let threshold = 0; threshold < 256; threshold++) {
-
-        weightBackground += histogram[threshold];
-
-        if (weightBackground === 0) {
-            continue;
-        }
-
-        const weightForeground =
-            total - weightBackground;
-
-        if (weightForeground === 0) {
-            break;
-        }
-
-        sumBackground +=
-            threshold * histogram[threshold];
-
-        const meanBackground =
-            sumBackground / weightBackground;
-
-        const meanForeground =
-            (sum - sumBackground) /
-            weightForeground;
-
-        const difference =
-            meanBackground - meanForeground;
-
-        const variance =
-            weightBackground *
-            weightForeground *
-            difference *
-            difference;
-
-        if (variance > bestVariance) {
-
-            bestVariance = variance;
-
-            bestThreshold = threshold;
-        }
-    }
-
-    return bestThreshold;
-}
-
-
-/*
-===========================================================
-    GET RUN LENGTHS
-
-    Converts:
-
-        BLACK WHITE BLACK WHITE...
-
-    into:
-
-        [width, width, width, width...]
-
-===========================================================
-*/
-
-function getRunLengths(rowPixels, threshold) {
-
-    const runs = [];
-
-    let currentBlack =
-        rowPixels[0] < threshold;
-
-    let count = 1;
-
-    for (let i = 1; i < rowPixels.length; i++) {
-
-        const isBlack =
-            rowPixels[i] < threshold;
-
-        if (isBlack === currentBlack) {
-
-            count++;
-
-        } else {
-
-            runs.push({
-                black: currentBlack,
-                width: count
-            });
-
-            currentBlack = isBlack;
-
-            count = 1;
-        }
-    }
-
-    runs.push({
-        black: currentBlack,
-        width: count
-    });
-
-    return runs;
-}
-
-
-/*
-===========================================================
-    REMOVE VERY SMALL NOISE RUNS
-===========================================================
-*/
-
-function cleanRuns(runs) {
-
-    if (runs.length === 0) {
-        return runs;
-    }
-
-    const result = [];
-
-    for (let i = 0; i < runs.length; i++) {
-
-        const run = runs[i];
-
-        /*
-            Ignore tiny camera noise.
-        */
-
-        if (run.width <= 1) {
-
-            if (result.length > 0) {
-
-                result[result.length - 1].width +=
-                    run.width;
-
-            }
-
-        } else {
-
-            result.push({
-                black: run.black,
-                width: run.width
-            });
-
-        }
-    }
-
-    return result;
-}
-
-
-/*
-===========================================================
-    MATCH ONE CODE 128 SYMBOL
-===========================================================
-*/
-
-function matchCode128Pattern(widths) {
-
-    if (widths.length !== 6) {
-        return null;
-    }
-
-    const total =
-        widths.reduce(
-            (sum, value) => sum + value,
-            0
-        );
-
-    if (total <= 0) {
-        return null;
-    }
-
-    let bestCode = null;
-    let bestError = Infinity;
-
-    for (
-        let code = 0;
-        code < 106;
-        code++
-    ) {
-
-        const pattern =
-            CODE128_PATTERNS[code];
-
-        if (!pattern) {
-            continue;
-        }
-
-        /*
-            Code 128 normal symbol = 11 modules
-        */
-
-        const moduleWidth =
-            total / 11;
-
-        let error = 0;
-
-        for (let i = 0; i < 6; i++) {
-
-            const expected =
-                Number(pattern[i]) *
-                moduleWidth;
-
-            const actual =
-                widths[i];
-
-            error +=
-                Math.abs(actual - expected) /
-                moduleWidth;
-        }
-
-        /*
-            Smaller error = better match
-        */
-
-        if (error < bestError) {
-
-            bestError = error;
-
-            bestCode = code;
-        }
-    }
-
-    /*
-        Reject very bad matches.
-    */
-
-    if (
-        bestCode === null ||
-        bestError > 3.5
-    ) {
-
-        return null;
-    }
-
-    return {
-        code: bestCode,
-        error: bestError
-    };
-}
-
-
-/*
-===========================================================
-    CHECK CODE 128 CHECKSUM
-===========================================================
-*/
-
-function checkChecksum(codes) {
-
-    if (codes.length < 3) {
         return false;
     }
 
-    const startCode = codes[0];
-
-    let sum = startCode;
-
-    /*
-        Data characters start at index 1.
-        Last item = checksum.
-    */
-
-    for (
-        let i = 1;
-        i < codes.length - 1;
-        i++
-    ) {
-
-        sum +=
-            codes[i] * i;
-    }
-
-    const expected =
-        sum % 103;
-
-    const actual =
-        codes[codes.length - 1];
-
-    return expected === actual;
+    return true;
 }
 
 
 /*
-===========================================================
-    DECODE CODE 128
-===========================================================
-*/
-
-function decodeCode128(runs) {
-
-    /*
-        A normal barcode starts with a BLACK bar.
-
-        Find every black run as possible start.
-    */
-
-    for (
-        let start = 0;
-        start < runs.length - 5;
-        start++
-    ) {
-
-        if (!runs[start].black) {
-            continue;
-        }
-
-        const firstWidths = [];
-
-        for (
-            let j = 0;
-            j < 6;
-            j++
-        ) {
-
-            if (!runs[start + j]) {
-                break;
-            }
-
-            firstWidths.push(
-                runs[start + j].width
-            );
-        }
-
-        if (firstWidths.length !== 6) {
-            continue;
-        }
-
-        const first =
-            matchCode128Pattern(firstWidths);
-
-        if (!first) {
-            continue;
-        }
-
-        /*
-            Must be one of the three START codes.
-        */
-
-        if (
-            first.code !== START_A &&
-            first.code !== START_B &&
-            first.code !== START_C
-        ) {
-
-            continue;
-        }
-
-        const codes = [
-            first.code
-        ];
-
-        let position =
-            start + 6;
-
-        /*
-            Read symbols
-        */
-
-        while (
-            position + 5 <
-            runs.length
-        ) {
-
-            /*
-                Check STOP pattern first.
-
-                STOP has 7 runs.
-            */
-
-            if (
-                position + 6 <
-                runs.length
-            ) {
-
-                const stopWidths = [];
-
-                for (
-                    let j = 0;
-                    j < 7;
-                    j++
-                ) {
-
-                    stopWidths.push(
-                        runs[position + j].width
-                    );
-                }
-
-                const stopPattern =
-                    matchStopPattern(stopWidths);
-
-                if (stopPattern) {
-
-                    /*
-                        Need checksum before STOP
-                    */
-
-                    if (
-                        !checkChecksum(codes)
-                    ) {
-
-                        break;
-                    }
-
-                    /*
-                        Convert data
-                    */
-
-                    const dataCodes =
-                        codes.slice(
-                            1,
-                            codes.length - 1
-                        );
-
-                    let result = "";
-
-                    let currentSet = "B";
-
-                    /*
-                        Handle Set B.
-                    */
-
-                    for (
-                        let i = 0;
-                        i < dataCodes.length;
-                        i++
-                    ) {
-
-                        const code =
-                            dataCodes[i];
-
-                        if (code === 100) {
-
-                            currentSet = "B";
-                            continue;
-
-                        }
-
-                        if (code === 101) {
-
-                            currentSet = "A";
-                            continue;
-
-                        }
-
-                        if (
-                            currentSet === "B" &&
-                            code <= 95
-                        ) {
-
-                            const character =
-                                code128ValueToCharacter(
-                                    code
-                                );
-
-                            if (character !== null) {
-
-                                result += character;
-
-                            }
-
-                        } else {
-
-                            /*
-                                We mainly expect Set B
-                                for your barcodes.
-                            */
-
-                            return null;
-                        }
-                    }
-
-                    /*
-                        Only return useful text.
-                    */
-
-                    if (
-                        result.length > 0 &&
-                        /^[\x20-\x7E]+$/.test(result)
-                    ) {
-
-                        return result;
-                    }
-
-                    break;
-                }
-            }
-
-            /*
-                Read normal 6-run symbol
-            */
-
-            const widths = [];
-
-            for (
-                let j = 0;
-                j < 6;
-                j++
-            ) {
-
-                widths.push(
-                    runs[position + j].width
-                );
-            }
-
-            const matched =
-                matchCode128Pattern(widths);
-
-            if (!matched) {
-                break;
-            }
-
-            /*
-                STOP is handled separately.
-            */
-
-            if (matched.code === STOP) {
-                break;
-            }
-
-            codes.push(matched.code);
-
-            position += 6;
-        }
-    }
-
-    return null;
-}
-
-
-/*
-===========================================================
-    STOP PATTERN MATCHING
-===========================================================
-*/
-
-function matchStopPattern(widths) {
-
-    if (widths.length !== 7) {
-        return false;
-    }
-
-    const pattern =
-        CODE128_PATTERNS[106];
-
-    const total =
-        widths.reduce(
-            (sum, value) => sum + value,
-            0
-        );
-
-    /*
-        STOP = 13 modules
-    */
-
-    const moduleWidth =
-        total / 13;
-
-    let error = 0;
-
-    for (let i = 0; i < 7; i++) {
-
-        const expected =
-            Number(pattern[i]) *
-            moduleWidth;
-
-        error +=
-            Math.abs(
-                widths[i] - expected
-            ) / moduleWidth;
-    }
-
-    return error < 4;
-}
-
-
-/*
-===========================================================
-    READ A HORIZONTAL SCAN LINE
-===========================================================
-*/
-
-function readScanLine(y) {
-
-    /*
-        Make canvas same size as video.
-    */
-
-    const width = canvas.width;
-
-    const image =
-        ctx.getImageData(
-            0,
-            y,
-            width,
-            1
-        );
-
-    const gray = new Uint8Array(width);
-
-    for (
-        let x = 0;
-        x < width;
-        x++
-    ) {
-
-        const index = x * 4;
-
-        const r = image.data[index];
-        const g = image.data[index + 1];
-        const b = image.data[index + 2];
-
-        /*
-            Convert RGB to grayscale
-        */
-
-        gray[x] =
-            0.299 * r +
-            0.587 * g +
-            0.114 * b;
-    }
-
-    const threshold =
-        getOtsuThreshold(gray);
-
-    let runs =
-        getRunLengths(
-            gray,
-            threshold
-        );
-
-    runs =
-        cleanRuns(runs);
-
-    /*
-        Barcode should normally start/end
-        with WHITE quiet zone.
-
-        Remove first white run.
-    */
-
-    if (
-        runs.length > 0 &&
-        !runs[0].black
-    ) {
-
-        runs.shift();
-    }
-
-    /*
-        Remove final white area.
-    */
-
-    if (
-        runs.length > 0 &&
-        !runs[runs.length - 1].black
-    ) {
-
-        runs.pop();
-    }
-
-    return runs;
-}
-
-
-/*
-===========================================================
-    SCAN MULTIPLE HORIZONTAL LINES
-===========================================================
-
-    One line may pass through bad/blurred part
-    of barcode.
-
-    So we scan many lines.
-===========================================================
-*/
-
-function scanFrame() {
-
-    if (!scanning) {
-        return;
-    }
-
-    if (
-        video.readyState <
-        video.HAVE_ENOUGH_DATA
-    ) {
-
-        requestAnimationFrame(scanFrame);
-
-        return;
-    }
-
-    const width =
-        video.videoWidth;
-
-    const height =
-        video.videoHeight;
-
-    if (!width || !height) {
-
-        requestAnimationFrame(scanFrame);
-
-        return;
-    }
-
-    /*
-        Canvas receives video frame.
-    */
-
-    canvas.width = width;
-    canvas.height = height;
-
-    ctx.drawImage(
-        video,
-        0,
-        0,
-        width,
-        height
-    );
-
-
-    /*
-        Scan center area.
-
-        Barcode is horizontal,
-        therefore use horizontal scan lines.
-    */
-
-    const centerY =
-        Math.floor(height / 2);
-
-    const offsets = [
-        -80,
-        -60,
-        -40,
-        -20,
-        0,
-        20,
-        40,
-        60,
-        80
-    ];
-
-
-    for (const offset of offsets) {
-
-        const y =
-            centerY + offset;
-
-        if (
-            y < 0 ||
-            y >= height
-        ) {
-            continue;
-        }
-
-        const runs =
-            readScanLine(y);
-
-        if (
-            !runs ||
-            runs.length < 12
-        ) {
-
-            continue;
-        }
-
-        const value =
-            decodeCode128(runs);
-
-        if (value) {
-
-            showResult(value);
-
-            return;
-        }
-    }
-
-
-    /*
-        Continue scanning.
-    */
-
-    requestAnimationFrame(scanFrame);
-}
-
-
-/*
-===========================================================
-    SHOW RESULT
-===========================================================
-*/
-
-function showResult(value) {
-
-    if (!value) {
-        return;
-    }
-
-    /*
-        Prevent same value being repeatedly shown.
-    */
-
-    if (value === lastResult) {
-        return;
-    }
-
-    lastResult = value;
-
-    resultText.textContent = value;
-
-    statusText.textContent =
-        "Barcode detected!";
-
-    /*
-        Stop automatically after successful scan.
-    */
-
-    stopCamera();
-}
-
-
-/*
-===========================================================
-    START CAMERA
-===========================================================
+====================================================
+START CAMERA
+====================================================
 */
 
 async function startCamera() {
 
+    if (scanning) {
+        return;
+    }
+
+
+    /*
+    -----------------------------------------------
+    Check browser support
+    -----------------------------------------------
+    */
+
+    if (!checkBarcodeDetector()) {
+
+        return;
+    }
+
+
     try {
 
         /*
-            If already running, stop first.
+        -------------------------------------------
+        Create barcode detector
+        -------------------------------------------
         */
 
-        if (stream) {
-            stopCamera();
-        }
+        detector =
+            new BarcodeDetector({
 
-        resultText.textContent = "---";
+                formats: [
 
-        lastResult = "";
+                    "code_128",
 
-        statusText.textContent =
-            "Requesting camera permission...";
+                    "code_39",
+
+                    "code_93",
+
+                    "codabar",
+
+                    "ean_13",
+
+                    "ean_8",
+
+                    "itf",
+
+                    "upc_a",
+
+                    "upc_e"
+
+                ]
+
+            });
 
 
         /*
-            Open back camera if available.
+        -------------------------------------------
+        Open camera
+        -------------------------------------------
         */
 
         stream =
             await navigator.mediaDevices.getUserMedia({
 
                 video: {
+
                     facingMode: {
                         ideal: "environment"
                     },
@@ -1290,70 +352,248 @@ async function startCamera() {
 
                     height: {
                         ideal: 720
-                    },
+                    }
 
-                    focusMode: "continuous"
                 },
 
                 audio: false
+
             });
 
 
+        /*
+        -------------------------------------------
+        Put camera into video
+        -------------------------------------------
+        */
+
         video.srcObject = stream;
+
 
         await video.play();
 
+
         scanning = true;
 
-        statusText.textContent =
+        result.innerText = "---";
+
+        status.innerText =
             "Scanning... Put barcode inside red box";
 
 
-        requestAnimationFrame(scanFrame);
+        /*
+        -------------------------------------------
+        Start detection
+        -------------------------------------------
+        */
+
+        scanBarcode();
+
 
     } catch (error) {
 
         console.error(error);
 
-        statusText.textContent =
+        status.innerText =
             "Camera error: " + error.message;
 
     }
+
 }
 
 
 /*
-===========================================================
-    STOP CAMERA
-===========================================================
+====================================================
+SCAN BARCODE
+====================================================
+*/
+
+async function scanBarcode() {
+
+    if (!scanning) {
+        return;
+    }
+
+
+    /*
+    -----------------------------------------------
+    Don't run two detections simultaneously
+    -----------------------------------------------
+    */
+
+    if (detecting) {
+
+        requestAnimationFrame(
+            scanBarcode
+        );
+
+        return;
+    }
+
+
+    detecting = true;
+
+
+    try {
+
+        /*
+        -------------------------------------------
+        Detect barcode from camera
+        -------------------------------------------
+        */
+
+        const barcodes =
+            await detector.detect(video);
+
+
+        /*
+        -------------------------------------------
+        If barcode found
+        -------------------------------------------
+        */
+
+        if (
+            barcodes &&
+            barcodes.length > 0
+        ) {
+
+            const barcode =
+                barcodes[0];
+
+
+            const value =
+                barcode.rawValue;
+
+
+            console.log(
+                "Barcode detected:",
+                value
+            );
+
+
+            if (value) {
+
+                /*
+                -----------------------------------
+                Show ONLY barcode value
+                -----------------------------------
+                */
+
+                result.innerText =
+                    value;
+
+
+                status.innerText =
+                    "Barcode detected";
+
+
+                lastDetected =
+                    value;
+
+
+                /*
+                -----------------------------------
+                Stop camera
+                -----------------------------------
+                */
+
+                stopCamera();
+
+
+                detecting = false;
+
+                return;
+            }
+
+        }
+
+    } catch (error) {
+
+        console.log(
+            "Detection error:",
+            error
+        );
+
+    }
+
+
+    detecting = false;
+
+
+    /*
+    -----------------------------------------------
+    Continue scanning
+    -----------------------------------------------
+    */
+
+    if (scanning) {
+
+        requestAnimationFrame(
+            scanBarcode
+        );
+
+    }
+
+}
+
+
+/*
+====================================================
+STOP CAMERA
+====================================================
 */
 
 function stopCamera() {
 
     scanning = false;
 
+    detecting = false;
+
+
     if (stream) {
 
         stream
             .getTracks()
-            .forEach(track => {
-                track.stop();
-            });
+            .forEach(
+                function(track) {
+
+                    track.stop();
+
+                }
+            );
 
         stream = null;
+
     }
+
 
     video.srcObject = null;
 
-    statusText.textContent =
-        "Camera stopped";
+
+    /*
+        Don't change result here.
+        We want to keep the detected value.
+    */
+
+    if (lastDetected) {
+
+        status.innerText =
+            "Barcode detected";
+
+    } else {
+
+        status.innerText =
+            "Camera stopped";
+
+    }
+
 }
 
 
 /*
-===========================================================
-    BUTTONS
-===========================================================
+====================================================
+BUTTONS
+====================================================
 */
 
 startBtn.addEventListener(
@@ -1361,26 +601,11 @@ startBtn.addEventListener(
     startCamera
 );
 
+
 stopBtn.addEventListener(
     "click",
     stopCamera
 );
-
-
-/*
-===========================================================
-    CHECK CAMERA SUPPORT
-===========================================================
-*/
-
-if (
-    !navigator.mediaDevices ||
-    !navigator.mediaDevices.getUserMedia
-) {
-
-    statusText.textContent =
-        "Camera is not supported in this browser.";
-}
 
 </script>
 
